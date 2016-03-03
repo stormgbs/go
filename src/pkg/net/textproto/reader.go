@@ -546,10 +546,12 @@ func CanonicalMIMEHeaderKey(s string) string {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if upper && 'a' <= c && c <= 'z' {
-			return canonicalMIMEHeaderKey([]byte(s))
+            return s
+			//return canonicalMIMEHeaderKey([]byte(s))
 		}
 		if !upper && 'A' <= c && c <= 'Z' {
-			return canonicalMIMEHeaderKey([]byte(s))
+            return s
+			//return canonicalMIMEHeaderKey([]byte(s))
 		}
 		upper = c == '-'
 	}
@@ -562,6 +564,8 @@ const toLower = 'a' - 'A'
 // allowed to mutate the provided byte slice before returning the
 // string.
 func canonicalMIMEHeaderKey(a []byte) string {
+    return string(a)
+
 	upper := true
 	for i, c := range a {
 		// Canonicalize: first letter upper case

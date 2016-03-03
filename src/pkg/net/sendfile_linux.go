@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -14,6 +14,43 @@ import (
 // at a time.
 const maxSendfileSize int = 4 << 20
 
+
+// wheelcomplex
+
+//
+func sendFileBySplice(c *netFD, r io.Reader) (written int64, err error, handled bool) {
+	var remain int64 = 1 << 62 // by default, copy until EOF
+
+	isFixed := false
+	lr, ok := r.(*io.LimitedReader)
+	if ok {
+		isFixed = true
+		remain, r = lr.N, lr.R
+		if remain <= 0 {
+			return 0, nil, true
+		}
+	}
+	// we can use splice
+	amt := int64(-1)
+	if isFixed {
+		amt = remain
+	}
+	// if this is a network connection
+	// TODO(pmh/maybe): support
+	// for UDPConn under certain
+	// circumstances.
+	// do not use switch for speed
+	if nfd, ok := r.(*UnixConn); ok {
+		return splice(c, nfd.fd, amt)
+	}
+	if nfd, ok := r.(*TCPConn); ok {
+		return splice(c, nfd.fd, amt)
+	}
+	return 0, nil, false
+}
+
+// wheelcomplex
+
 // sendFile copies the contents of r to c using the sendfile
 // system call to minimize copies.
 //
@@ -22,6 +59,17 @@ const maxSendfileSize int = 4 << 20
 //
 // if handled == false, sendFile performed no work.
 func sendFile(c *netFD, r io.Reader) (written int64, err error, handled bool) {
+
+	// wheelcomplex
+
+	// try to send by splice
+	written, err, handled = sendFileBySplice(c, r)
+	if handled {
+		return written, err, handled
+	}
+
+	// wheelcomplex
+
 	var remain int64 = 1 << 62 // by default, copy until EOF
 
 	lr, ok := r.(*io.LimitedReader)
@@ -64,13 +112,16 @@ func sendFile(c *netFD, r io.Reader) (written int64, err error, handled bool) {
 		if err1 != nil {
 			// This includes syscall.ENOSYS (no kernel
 			// support) and syscall.EINVAL (fd types which
-			// don't implement sendfile together)
-			err = &OpError{"sendfile", c.net, c.raddr, err1}
+			// don't implement sendfile)
+			err = err1
 			break
 		}
 	}
 	if lr != nil {
 		lr.N = remain
+	}
+	if err != nil {
+		err = os.NewSyscallError("sendfile", err)
 	}
 	return written, err, written > 0
 }
